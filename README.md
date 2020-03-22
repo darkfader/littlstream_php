@@ -11,7 +11,8 @@ You need to SSH/SCP the files to your NAS. No neat package here.
 ## Public IP / NAS
 Not sure if required but public IP may be required. What I did was to hook my PS4 to my second NAS ethernet port.
 Enable DHCP on public IP range 203.0.113.x (TEST-NET-1 range).
-Also, I mapped test-net-3-1.darkfader.net to 203.0.113.1 so that my PS4 can get the feed from http://test-net-3-1.darkfader.net/littlstream_php/.
+Also, I mapped test-net-3-1.darkfader.net to 203.0.113.1 so that my PS4 can get the feed from `http://test-net-3-1.darkfader.net/littlstream_php/`.
+Visit https://my.littlstar.com/feeds to add this stream.
 Also had to enable NAT, so internet traffic returned to PS4 goes via my NAS.
 Create/edit `/etc/config/autorun.sh`:
 ```
