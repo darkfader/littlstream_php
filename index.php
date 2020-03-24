@@ -148,10 +148,18 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
             ($filter_v != "" ? ' -filter:v ' . escapeshellarg($filter_v) : '') .
             ' -f image2 -y ' . escapeshellarg($thumbnail_abspath);
 
-        $ffprobe_cache_key = $t . '_ffprobe' . ($media_subdir == Config::transcoded_subdir ? '_tc' : '');
+        $transcoded_file = dirname(__FILE__) . DIRECTORY_SEPARATOR . Config::transcoded_subdir . DIRECTORY_SEPARATOR . $t . '.mp4';
+        $is_trancoded = $media_subdir == Config::transcoded_subdir;
+        $has_transcoded = !$is_trancoded && is_file($transcoded_file);
+        if ($has_transcoded) {
+            return;     // hide original
+        }
+
+        $ffprobe_cache_key = $t . '_ffprobe' . ($is_trancoded ? '_tc' : '');
         $json = TempCache::get($ffprobe_cache_key);
         $ffprobe = $json !== null ? json_decode($json) : null;
-        $channel = getChannelForTitle($media_subdir == Config::transcoded_subdir ? $title . '*' : $title, $media_subdir == Config::transcoded_subdir ? 'transcoded' : null);
+        $channel = getChannelForTitle($title, $is_trancoded ? 'transcoded' : null);
+        $title = $is_trancoded ? $title . '*' : $title;
 
         $item = $rssdoc->createElement('item');
         $channel->appendChild($item);
@@ -241,18 +249,20 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
         $item->appendChild($rssdoc->createElement('ls:content-layout', $content_layout));
 
 
-        if ($media_subdir === Config::transcoded_subdir) {
-            return;
+        if ($is_trancoded) {
+            return;     // skip transcoding if already transcoded
         }
 
         // check against LittlStar PSVR recommendations
         $audio_ok = ($audio_codec == 'aac' && $audio_bit_rate <= Config::max_audio_bit_rate + 1000 && $audio_channels <= 2);
         $video_ok = ($video_codec == 'h264' && $video_bit_rate <= Config::max_video_bit_rate && $video_width <= Config::max_video_width && $video_height <= Config::max_video_height && $video_fps >= Config::min_video_fps && $video_fps <= Config::max_video_fps);
 
+        # paths on transcoding machine
         $transcode_media_file = Config::transcode_media_path . DIRECTORY_SEPARATOR . $fileinfo->getFilename();
-        # $transcoded_path = dirname(__FILE__) . DIRECTORY_SEPARATOR . $transcoded_subdir;
-        $transcoded_path = Config::transcode_destination_path;
-        $transcoded_file = $transcoded_path . DIRECTORY_SEPARATOR . $t . '.mp4';
+        if (defined('Config::transcode_destination_path')) {
+            $transcoded_file = Config::transcode_destination_path . DIRECTORY_SEPARATOR . $t . '.mp4';
+        }
+
         if ((!$video_ok || !$audio_ok) && !file_exists($transcoded_file)) {
 
             if ($video_bit_rate > Config::max_video_bit_rate) $video_bit_rate = Config::max_video_bit_rate;
@@ -283,7 +293,7 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
                     ' -filter_complex ' . escapeshellarg($filter_complex) .
                     ' -codec:v libx264' .
                     (Config::transcode_preview ? ' -preset veryfast' : ' -preset veryfast') .   // see graph at https://trac.ffmpeg.org/wiki/Encode/H.264
-                    #(isset(Config::transcode_crf) ? ' -crf ' . strval(Config::transcode_crf) : '') .
+                    (defined('Config::transcode_crf') ? ' -crf ' . strval(Config::transcode_crf) : '') .
                     #' -vf format=yuv420p' .
                     #' -filter:v minterpolate -r 60' .
                     ' -b:v ' . strval($video_bit_rate) .
