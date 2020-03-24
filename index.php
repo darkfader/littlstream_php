@@ -41,8 +41,22 @@ function full_url($s, $use_forwarded_host = false)
     return url_origin($s, $use_forwarded_host) . $s['REQUEST_URI'];
 }
 
+$guessed_base_url = url_origin($_SERVER);
+# request URI encoded instead of query?
+foreach (explode('/', $_SERVER['REQUEST_URI']) as $r) {
+    $s = explode('=', $r, 2);
+    if (count($s) >= 2) {       // key/value pair encoded in request URI
+        $_REQUEST[$s[0]] = $s[1];
+    } else {    // still part of base URL
+        if ($guessed_base_url[-1] != '/') $guessed_base_url .= '/';
+        $guessed_base_url .= $r;
+    }
+    if ($guessed_base_url[-1] != '/') $guessed_base_url .= '/';
+}
+
 if (!isset($base_url)) {
-    $base_url = str_replace('index.php', '', full_url($_SERVER));
+    // $base_url = str_replace('index.php', '', full_url($_SERVER));
+    $base_url = $guessed_base_url;
 }
 
 $rssdoc = new DOMDocument('1.0', 'UTF-8');
@@ -193,12 +207,6 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
         /*
          * channel filters
          */
-
-        # request URI encoded instead of query?
-        foreach (explode('/', $_SERVER['REQUEST_URI']) as $r) {
-            $s = explode('=', $r, 2);
-            $_REQUEST[$s[0]] = $s[1];
-        }
 
         if ($_REQUEST['l'] !== null && $content_layout != $_REQUEST['l']) return;
         if ($_REQUEST['l_'] !== null && $content_layout == $_REQUEST['l_']) return;

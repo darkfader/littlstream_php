@@ -1,4 +1,5 @@
 RewriteEngine on
+Options FollowSymLinks
 
 # set ENV:BASE
 RewriteCond %{REQUEST_URI}::$1 ^(.*?/)(.*)::\2$
