@@ -1,0 +1,12 @@
+RewriteEngine on
+
+# set ENV:BASE
+RewriteCond %{REQUEST_URI}::$1 ^(.*?/)(.*)::\2$
+RewriteRule ^(.*)$ - [E=BASE:%1]
+
+# handle everything that isn't or doesn't look like a file
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !\.mp4$
+RewriteRule ^(.*)$ %{ENV:BASE}/index.php [QSA,L]
+

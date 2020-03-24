@@ -54,43 +54,24 @@ $rss->setAttribute("xmlns:atom", "http://www.w3.org/2005/Atom");
 $rss->setAttribute("version", "2.0");
 $rss->setAttribute("xmlns:ls", "https://www.littlstar.com");
 
-$channels = array();
 
-function getChannelForTitle($title, $key = null)
-{
-    global $rssdoc, $rss, $channels, $base_url, $feed_ttl;
+$channel = $rssdoc->createElement("channel");
+$rss->appendChild($channel);
 
-    if ($key === null) {
-        $e = preg_split('/[0-9-.]/', $title, 2);
-        $key = $e[0];
-    }
-    $key = 'video';     # only 1 channel per feed allowed?? meh.
+$channel->appendChild($rssdoc->createElement('ttl', strval($feed_ttl)));
+$channel->appendChild($rssdoc->createElement('title', $channel_title));
+$channel->appendChild($rssdoc->createElement('description', $channel_title));
+$channel->appendChild($rssdoc->createElement('category', 'Videos'));
+$channel->appendChild($rssdoc->createElement('generator', 'Littlstream_php'));
+$channel->appendChild($rssdoc->createElement('lastBuildDate', date("c")));
+$channel->appendChild($rssdoc->createElement('link', 'http://github.com/dylang/node-rss'));
 
-    $channel = $channels[$key];
-    if ($channel !== null) {
-        return $channel;
-    }
+$image = $rssdoc->createElement('image');
+$channel->appendChild($image);
+$image->appendChild($rssdoc->createElement('url', $base_url . 'vr.jpg'));
+$image->appendChild($rssdoc->createElement('title', 'VR'));
+$image->appendChild($rssdoc->createElement('link', ''));
 
-    $channel = $rssdoc->createElement("channel");
-    $channels[$key] = $channel;
-    $channel = $rss->appendChild($channel);
-
-    $channel->appendChild($rssdoc->createElement('ttl', strval($feed_ttl)));
-    $channel->appendChild($rssdoc->createElement('title', $key));
-    $channel->appendChild($rssdoc->createElement('description', $key));
-    $channel->appendChild($rssdoc->createElement('category', 'Videos'));
-    $channel->appendChild($rssdoc->createElement('generator', 'Littlstream_php'));
-    $channel->appendChild($rssdoc->createElement('lastBuildDate', date("c")));
-    $channel->appendChild($rssdoc->createElement('link', 'http://github.com/dylang/node-rss'));
-
-    $image = $rssdoc->createElement('image');
-    $channel->appendChild($image);
-    $image->appendChild($rssdoc->createElement('url', $base_url . 'vr.jpg'));
-    $image->appendChild($rssdoc->createElement('title', 'VR'));
-    $image->appendChild($rssdoc->createElement('link', ''));
-
-    return $channel;
-}
 
 $total_gb = 0;
 $total_duration = 0;
@@ -102,6 +83,7 @@ array_push($transcode_commands, "\n", "#!/bin/sh");
 
 function processFile($media_abspath, $media_subdir, $fileinfo)
 {
+    global $channel;    // we can have only one anyway
     global $got_lock, $rssdoc, $base_url;
     global $total_gb, $total_duration, $transcode_total_gb, $transcode_total_duration, $transcode_commands;
 
@@ -116,8 +98,16 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
         $thumbnail_abspath = $media_abspath . DIRECTORY_SEPARATOR . Config::thumb_subdir . DIRECTORY_SEPARATOR . $t . '.jpg';
         $thumbnail_url = $base_url . $media_subdir . DIRECTORY_SEPARATOR . Config::thumb_subdir . '/' . $t . '.jpg';
 
+        $transcoded_file = dirname(__FILE__) . DIRECTORY_SEPARATOR . Config::transcoded_subdir . DIRECTORY_SEPARATOR . $t . '.mp4';
+        $is_trancoded = $media_subdir == Config::transcoded_subdir;
+        $has_transcoded = !$is_trancoded && is_file($transcoded_file);
+        if ($has_transcoded) {
+            return;     // hide original
+        }
+
         if (!is_dir($media_abspath . DIRECTORY_SEPARATOR . Config::thumb_subdir)) {
             mkdir($media_abspath . DIRECTORY_SEPARATOR . Config::thumb_subdir);
+            #chmod($media_abspath . DIRECTORY_SEPARATOR . Config::thumb_subdir, 0777);
         }
 
         $content_type = Config::default_content_type;
@@ -137,45 +127,12 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
         $title = str_replace('_ou-fr', '', $title, $_ou_fr_count);
         if ($_ou_fr_count) $content_layout = 'ou_fr';
 
-        $filter_v = '';
-        if ($content_layout == 'sbs' || $content_layout == 'sbs_fr') $filter_v .= 'crop=in_w/2:in_h:0:0';
-        if ($content_layout == 'ou' || $content_layout == 'ou_fr') $filter_v .= 'crop=in_w:in_h/2:0:0';
-        # http://www.ffmpeg.org/ffmpeg-all.html#lenscorrection
-        if ($content_type == '180') $filter_v .= ', lenscorrection=cx=0.5:cy=0.5:k1=' . strval(Config::thumb_inv_k1) . ':k2=' . strval(Config::thumb_inv_k2);
-        if ($content_type == '360') $filter_v .= ', lenscorrection=cx=0.5:cy=0.5:k1=' . strval(Config::thumb_inv_k1) . ':k2=' . strval(Config::thumb_inv_k2);  // TODO: check...
-        $command = Config::ffmpeg_bin_path . 'ffmpeg' .
-            ' -discard nokey -hide_banner -noaccurate_seek -ss "00:10:00" -i ' . escapeshellarg($file_abspath) . ' -an -r 1 -frames:v 1 -codec:v mjpeg' .
-            ($filter_v != "" ? ' -filter:v ' . escapeshellarg($filter_v) : '') .
-            ' -f image2 -y ' . escapeshellarg($thumbnail_abspath);
-
-        $transcoded_file = dirname(__FILE__) . DIRECTORY_SEPARATOR . Config::transcoded_subdir . DIRECTORY_SEPARATOR . $t . '.mp4';
-        $is_trancoded = $media_subdir == Config::transcoded_subdir;
-        $has_transcoded = !$is_trancoded && is_file($transcoded_file);
-        if ($has_transcoded) {
-            return;     // hide original
-        }
-
         $ffprobe_cache_key = $t . '_ffprobe' . ($is_trancoded ? '_tc' : '');
         $json = TempCache::get($ffprobe_cache_key);
         $ffprobe = $json !== null ? json_decode($json) : null;
-        $channel = getChannelForTitle($title, $is_trancoded ? 'transcoded' : null);
-        $title = $is_trancoded ? $title . '*' : $title;
+        // $channel = getChannelForTitle($title, $is_trancoded ? 'transcoded' : null);
 
-        $item = $rssdoc->createElement('item');
-        $channel->appendChild($item);
-
-        $item->appendChild($rssdoc->createComment($t));
-
-        if ($got_lock) {    // allow exec?
-            // take thumbnail
-            if (!file_exists($thumbnail_abspath)) {
-                # $item->appendChild($rssdoc->createComment($thumbnail_abspath));
-                $item->appendChild($rssdoc->createComment('Create thumbnail: ' . $command));
-                if ($ffprobe === null) {
-                    exec($command);
-                }
-            }
-
+        if ($got_lock) {    // allow exec?   well, for now we aren't going to execute in browser  xD
             // ffprobe
             if ($ffprobe === null || ($json == '{}' && Config::cache_duration_failed == 0)) {
                 unset($output);
@@ -227,16 +184,75 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
             $title = $title + "!";
         }
 
+
+        // check against LittlStar PSVR recommendations
+        $audio_ok = ($audio_codec == 'aac' && $audio_bit_rate <= Config::max_audio_bit_rate + 1000 && $audio_channels <= 2);
+        $video_ok = ($video_codec == 'h264' && $video_bit_rate <= Config::max_video_bit_rate && $video_width <= Config::max_video_width && $video_height <= Config::max_video_height && $video_fps >= Config::min_video_fps && $video_fps <= Config::max_video_fps);
+        $need_transcoding = !$video_ok || !$audio_ok;
+
+        /*
+         * channel filters
+         */
+
+        # request URI encoded instead of query?
+        foreach (explode('/', $_SERVER['REQUEST_URI']) as $r) {
+            $s = explode('=', $r, 2);
+            $_REQUEST[$s[0]] = $s[1];
+        }
+
+        if ($_REQUEST['l'] !== null && $content_layout != $_REQUEST['l']) return;
+        if ($_REQUEST['l_'] !== null && $content_layout == $_REQUEST['l_']) return;
+        if ($_REQUEST['c'] !== null && $content_type != $_REQUEST['c']) return;
+        if ($_REQUEST['c_'] !== null && $content_type == $_REQUEST['c_']) return;
+        if ($_REQUEST['t'] !== null && $is_trancoded != $_REQUEST['t']) return;
+        if ($_REQUEST['t_'] !== null && $is_trancoded == $_REQUEST['t_']) return;
+        if ($_REQUEST['x'] !== null && $need_transcoding != $_REQUEST['x']) return;
+        if ($_REQUEST['x_'] !== null && $need_transcoding == $_REQUEST['x_']) return;
+        if ($_REQUEST['p'] !== null && !preg_match(Config::query_presets[$_REQUEST['p']] ?? $_REQUEST['p'], $title)) return;
+        if ($_REQUEST['p_'] !== null && !preg_match(Config::query_presets[$_REQUEST['p_']] ?? $_REQUEST['p_'], $title)) return;
+
+        /*
+         * create the item element
+         */
+
+        if ($is_trancoded) {
+            $title = $title . '*';
+        } else if ($need_transcoding) {
+            $title = $title . '&';
+        }
+
+        $item = $rssdoc->createElement('item');
+        $channel->appendChild($item);
+
+        $item->appendChild($rssdoc->createComment($t));
+
+        // take thumbnail
+        if ($got_lock) {    // allow exec?
+            $filter_v = '';
+            if ($content_layout == 'sbs' || $content_layout == 'sbs_fr') $filter_v .= 'crop=in_w/2:in_h:0:0';
+            if ($content_layout == 'ou' || $content_layout == 'ou_fr') $filter_v .= 'crop=in_w:in_h/2:0:0';
+            # http://www.ffmpeg.org/ffmpeg-all.html#lenscorrection
+            if ($content_type == '180') $filter_v .= ', lenscorrection=cx=0.5:cy=0.5:k1=' . strval(Config::thumb_inv_k1) . ':k2=' . strval(Config::thumb_inv_k2);
+            if ($content_type == '360') $filter_v .= ', lenscorrection=cx=0.5:cy=0.5:k1=' . strval(Config::thumb_inv_k1) . ':k2=' . strval(Config::thumb_inv_k2);  // TODO: check...
+
+            $command = Config::ffmpeg_bin_path . 'ffmpeg' .
+                ' -discard nokey -hide_banner -noaccurate_seek -ss "00:10:00" -i ' . escapeshellarg($file_abspath) . ' -an -r 1 -frames:v 1 -codec:v mjpeg' .
+                ($filter_v != "" ? ' -filter:v ' . escapeshellarg($filter_v) : '') .
+                ' -f image2 -y ' . escapeshellarg($thumbnail_abspath);
+
+            if (!file_exists($thumbnail_abspath)) {
+                # $item->appendChild($rssdoc->createComment($thumbnail_abspath));
+                $item->appendChild($rssdoc->createComment('Create thumbnail: ' . $command));
+                if ($ffprobe === null) {    # on error, $ffprobe is {}
+                    exec($command);
+                }
+            }
+        }
+
         // video info
         $item->appendChild($rssdoc->createComment("${video_codec}=${video_width}x${video_height}x${video_fps}:${video_bit_rate}, ${audio_codec}=${audio_channels}:${audio_bit_rate}"));
 
-        // $filesize_mb = round($ffprobe->format->size / 1024 / 1024);
-        // $calculated_filesize_mb = round((($audio_bit_rate + $video_bit_rate) * $duration) / 8 / 1024 / 1024);
-        // $item->appendChild($rssdoc->createComment("${filesize_mb}MB ${calculated_filesize_mb}MB"));
-        $total_gb += $ffprobe->format->size / 1024 / 1024 / 1024;
-        $total_duration += $duration;
-
-        $item->appendChild($rssdoc->createElement('title', $title . ($video_codec !== null ? ' (' . $video_codec . ', ' . round($video_bit_rate / 1000000.0, 3) . ' MiB/s)' : '')));
+        $item->appendChild($rssdoc->createElement('title', $title . ($video_codec !== null ? ' (' . $video_codec . ', ' . round($video_bit_rate / 1000000.0, 1) . ' MiB/s)' : '')));
         $item->appendChild($rssdoc->createElement('description', ''));
         $item->appendChild($rssdoc->createElement('link', $file_url));
         $item->appendChild($rssdoc->createElement('category', 'Adult'));
@@ -249,13 +265,25 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
         $item->appendChild($rssdoc->createElement('ls:content-layout', $content_layout));
 
 
+
+        /*
+         * summarize
+         */
+
+        // $filesize_mb = round($ffprobe->format->size / 1024 / 1024);
+        // $calculated_filesize_mb = round((($audio_bit_rate + $video_bit_rate) * $duration) / 8 / 1024 / 1024);
+        // $item->appendChild($rssdoc->createComment("${filesize_mb}MB ${calculated_filesize_mb}MB"));
+        $total_gb += $ffprobe->format->size / 1024 / 1024 / 1024;
+        $total_duration += $duration;
+
+
+        /*
+         * transcoding from here
+         */
+
         if ($is_trancoded) {
             return;     // skip transcoding if already transcoded
         }
-
-        // check against LittlStar PSVR recommendations
-        $audio_ok = ($audio_codec == 'aac' && $audio_bit_rate <= Config::max_audio_bit_rate + 1000 && $audio_channels <= 2);
-        $video_ok = ($video_codec == 'h264' && $video_bit_rate <= Config::max_video_bit_rate && $video_width <= Config::max_video_width && $video_height <= Config::max_video_height && $video_fps >= Config::min_video_fps && $video_fps <= Config::max_video_fps);
 
         # paths on transcoding machine
         $transcode_media_file = Config::transcode_media_path . DIRECTORY_SEPARATOR . $fileinfo->getFilename();
@@ -263,7 +291,7 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
             $transcoded_file = Config::transcode_destination_path . DIRECTORY_SEPARATOR . $t . '.mp4';
         }
 
-        if ((!$video_ok || !$audio_ok) && !file_exists($transcoded_file)) {
+        if ($need_transcoding && !file_exists($transcoded_file)) {
 
             if ($video_bit_rate > Config::max_video_bit_rate) $video_bit_rate = Config::max_video_bit_rate;
             if ($video_width > Config::max_video_width) $video_width = Config::max_video_width;

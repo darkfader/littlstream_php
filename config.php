@@ -12,6 +12,12 @@ class Config
     const thumb_inv_k1 = -0.15;  # I'm just guessing these. Only tried 180 degrees. Are these inverse radial distortion parameters??
     const thumb_inv_k2 = -0.15;
 
+    const query_presets = array(
+        // examples:
+        'good' => '/^(EXBVR|CACA)(?!\w)/',
+        'bad' => '/^(3DSVR|EXVR|TMAVR)(?!\w)/',
+    );
+
     # transcoding is better be done on another system. put here mounted paths to NAS.
     const transcode_preview = false;
     const transcode_overwrite = false;
@@ -35,7 +41,7 @@ class Config
 
     // cache ffprobe information
     const cache_duration = 604800;
-    const cache_duration_failed = 3600;
+    const cache_duration_failed = 0; //3600;
 
     const default_content_type = '180';  // 360, 180, ff, ar
     const default_content_layout = 'sbs';    // 2d, ou, sbs, ou_fr, sbs_fr, hcap

@@ -14,6 +14,22 @@ See config.php for some parameters.
 Enable web server on QTS. It will create a Web share.
 Set up the repo folder in the Web directory. Check `http://192.168.x.x/littlstream_php/`.
 Visit https://my.littlstar.com/feeds to add this stream.
+You can filter using query parameters: (negative filter using underscore `key_=value`)
+- `?l=ou` to only show over/under.
+- `?c=180` to only show 180 degrees VR.
+- `?p=/^a/i` to only show titles starting with a or A. Remember to URL-encode this pattern as `%2F%5Ea%2Fi`.
+- `?p=good` to use a regexp preset.
+- `?t=1` to only show transcoded videos. By default show transcoded but hide original.
+- `?x=0` to hide videos that needs transcoding.
+Combined examples:
+- `http://test-net-3-1.darkfader.net/littlstream_php/?c=180&l=sbs&x=0&p_=bad`  (query is hidden in LittlStar...)
+- `http://test-net-3-1.darkfader.net/littlstream_php/c=180/l=sbs/x=0/p_=bad`  (provided you use .htaccess rewrite rule)
+
+## Titles
+- Title shows removed _ou _360 etc. from filenames.
+- Suffix * for transcoded files.
+- Suffix & to show transcoding required.
+- It also appends video codec name and bitrate.
 
 ## Link media folder for serving thumbnails and media files
 Example:
@@ -80,3 +96,4 @@ umount /tmp/littlstream_php
 - Convert videos to lower bitrate (in background)
 - Correct various VR camera for PSVR. How to detect?
 - Simulate official channels. Custom feed is subscription only?
+- Add some more filters. Multiple queries of same type.
