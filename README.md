@@ -48,7 +48,7 @@ Lower `opcache.revalidate_freq = 60` value to 1 or so? Or totale disable it with
 `/etc/init.d/Qthttpd.sh restart` to apply settings?
 
 ## Mount this folder
-Enable SFTP on NAS so the Web folder can be mounted for development.
+Use SMB (check folder permissions!) or enable SFTP (not recommended) on NAS so the Web folder can be mounted for development.
 ```
 mkdir /tmp/littlstream_php
 diskutil unmount force /tmp/littlstream_php
