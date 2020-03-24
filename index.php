@@ -103,7 +103,7 @@ array_push($transcode_commands, "\n", "#!/bin/sh");
 function processFile($media_abspath, $media_subdir, $fileinfo)
 {
     global $got_lock, $rssdoc, $base_url;
-    global $total_gb, $total_duration, $transcode_total_gb, $transcode_total_duration;
+    global $total_gb, $total_duration, $transcode_total_gb, $transcode_total_duration, $transcode_commands;
 
     if (!$fileinfo->isDot()) {
         $t = $fileinfo->getFilename();
@@ -291,9 +291,9 @@ function processFile($media_abspath, $media_subdir, $fileinfo)
                     ' -maxrate ' . strval($video_bit_rate) .
                     ' -bufsize ' . strval(round($video_bit_rate * 1.0)))) .      // ????
                 ($audio_ok ? ' -codec:a copy' : ' -ac ' . strval($audio_channels) . ' -c:a aac -b:a ' . strval($audio_bit_rate)) .
-                (Config::transcode_overwrite ? ' -y' : '') .
+                (Config::transcode_overwrite ? ' -y' : ' -n') .
                 ' ' . escapeshellarg($transcoded_file) .
-                ' || rm ' . escapeshellarg($transcoded_file);
+                ''; #' || rm ' . escapeshellarg($transcoded_file);
 
             $item->appendChild($rssdoc->createComment('######## ' . $transcode_command . ' ########'));
 
@@ -329,7 +329,7 @@ if ($got_lock) {
 }
 
 try {
-    $fp = fopen(dirname(__FILE__) . DIRECTORY_SEPARATOR . $transcoded_subdir . DIRECTORY_SEPARATOR . 'transcode.cmd', 'wt');
+    $fp = fopen(dirname(__FILE__) . DIRECTORY_SEPARATOR . Config::transcoded_subdir . DIRECTORY_SEPARATOR . 'transcode.cmd', 'wt');
     fwrite($fp, implode("\n", $transcode_commands));
     fclose($fp);
 } catch (Exception $e) {
